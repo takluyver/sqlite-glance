@@ -15,5 +15,5 @@ categories = ["command-line-utilities", "database"]
 
 [dependencies]
 clap = "4.3.11"
-rusqlite = "0.29.0"
+rusqlite = { version = "0.29.0", features = ["bundled"] }
 yansi = { version = "1.0.0-rc", features = ["detect-tty", "detect-env"] }
