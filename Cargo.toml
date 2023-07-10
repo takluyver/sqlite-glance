@@ -1,7 +1,15 @@
 [package]
 name = "sqlite-glance"
+description = "Conveniently inspect an SQLite database file in the terminal"
+readme = "README.md"
 version = "0.1.0"
 edition = "2021"
+authors = [
+    "Thomas Kluyver <thomas.kluyver@xfel.eu>",
+]
+repository = "https://github.com/takluyver/sqlite-glance"
+license = "BSD-3-Clause"
+categories = ["command-line-utilities", "database"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
