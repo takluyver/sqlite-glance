@@ -49,14 +49,19 @@ fn main() -> Result<()> {
         let table = Table::new(&tbl, Rc::clone(&conn));
 
         let mut cols_unique = HashSet::new();  // Columns to label UNIQUE
+        let mut cols_w_index = HashSet::new(); // 1-column indices, not unique
         let mut pk_cols = Vec::new();         // Columns in the primary key
         let mut other_indexes = Vec::new();  // Indexes we'll list
         for ix in table.indices_info()? {
             let cols = ix.column_names(&conn)?;
             if ix.origin == "pk" {
                 pk_cols = cols
-            } else if ix.unique && cols.len() == 1 {
-                cols_unique.insert(cols.get(0).unwrap().to_string());
+            } else if cols.len() == 1 {
+                if ix.unique {
+                    cols_unique.insert(cols.get(0).unwrap().to_string());
+                } else {
+                    cols_w_index.insert(cols.get(0).unwrap().to_string());
+                }
             } else {
                 other_indexes.push((ix, cols))
             }
@@ -76,9 +81,10 @@ fn main() -> Result<()> {
             }
             if col_info.pk > 0 && pk_cols.len() == 1 {
                 print!(" PRIMARY KEY");
-            }
-            if cols_unique.contains(&col_info.name) {
+            } else if cols_unique.contains(&col_info.name) {
                 print!(" UNIQUE")
+            } else if cols_w_index.contains(&col_info.name) {
+                print!(" indexed")
             }
             println!();
         }
