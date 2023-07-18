@@ -1,16 +1,14 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::rc::Rc;
 use clap::{Arg, Command, value_parser};
 use rusqlite::{Connection, Result, OpenFlags};
 use yansi::{Condition, Paint};
 
 mod table;
 use table::{
+    Table,
     get_table_names,
-    get_table_indexes,
-    get_column_info,
-    get_index_columns,
-    count_rows,
 };
 
 fn fmt_col_names(names: &[String]) -> String {
@@ -38,9 +36,9 @@ fn main() -> Result<()> {
     yansi::whenever(Condition::TTY_AND_COLOR);
 
     let path = matches.get_one::<PathBuf>("path").unwrap();
-    let conn = Connection::open_with_flags(path, 
+    let conn = Rc::new(Connection::open_with_flags(path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
-    )?;
+    )?);
 
     let filename = PathBuf::from(path.file_name().unwrap());
     let table_names = get_table_names(&conn)?;
@@ -48,11 +46,13 @@ fn main() -> Result<()> {
     println!();
 
     for tbl in table_names {
+        let table = Table::new(&tbl, Rc::clone(&conn));
+
         let mut cols_unique = HashSet::new();  // Columns to label UNIQUE
         let mut pk_cols = Vec::new();         // Columns in the primary key
         let mut other_indexes = Vec::new();  // Indexes we'll list
-        for ix in get_table_indexes(&conn, &tbl)? {
-            let cols = get_index_columns(&conn, &ix.name)?;
+        for ix in table.indices_info()? {
+            let cols = ix.column_names(&conn)?;
             if ix.origin == "pk" {
                 pk_cols = cols
             } else if ix.unique && cols.len() == 1 {
@@ -61,12 +61,12 @@ fn main() -> Result<()> {
                 other_indexes.push((ix, cols))
             }
         }
-        let nrows = count_rows(&conn, &tbl)?;
+        let nrows = table.count_rows()?;
 
         println!("{} table ({} rows):", tbl.bright_green().bold(), nrows);
 
         // Columns info
-        for col_info in get_column_info(&conn, &tbl)? {
+        for col_info in table.columns_info()? {
             print!("  {}", col_info.name.cyan());
             if !col_info.dtype.is_empty() {
                 print!(" {}", col_info.dtype);

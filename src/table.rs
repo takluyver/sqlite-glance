@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use rusqlite::{Connection, Result, Row};
 
 #[derive(Debug)]
@@ -38,25 +40,68 @@ impl IndexInfo {
             partial: row.get("partial")?,
         })
     }
-}
 
-pub fn get_column_info(conn: &Connection, table_name: &str) -> Result<Vec<ColumnInfo>> {
-    let mut stmt = conn.prepare("SELECT * from pragma_table_xinfo(?)")?;
-    let rows = stmt.query_map([table_name], |row| ColumnInfo::from_row(row))?;
-    let mut res = Vec::new();
-    for info_result in rows {
-        res.push(info_result?);
+    pub fn column_names(&self, conn: &Connection) -> Result<Vec<String>> {
+        let mut stmt = conn.prepare(
+            "SELECT cid, name from pragma_index_info(?) ORDER BY seqno ASC"
+        )?;
+        let mut rows = stmt.query([&self.name])?;
+        let mut res = Vec::new();
+        while let Some(row) = rows.next()? {
+            res.push(match row.get("cid")? {
+                -1 => "<rowid>".to_string(),
+                -2 => "<expression>".to_string(),
+                _ => row.get("name")?,
+            })
+        }
+        Ok(res)
     }
-    Ok(res)
 }
 
-pub fn count_rows(conn: &Connection, table_name: &str) -> Result<u64> {
-    // Formatting SQL like this is bad in general, but we can't give the table
-    // name as a parameter, and we get it from 
-    conn.query_row(
-        &format!("SELECT count(*) from {}", table_name), [], |r| r.get(0)
-    )
+pub struct Table {
+    pub name: String,
+    pub conn: Rc<Connection>,
 }
+
+impl Table {
+    pub fn new(name: &str, conn: Rc<Connection>) -> Table {
+        Table {
+            name: name.to_string(),
+            conn: conn,
+        }
+    }
+
+    pub fn columns_info(&self) -> Result<Vec<ColumnInfo>> {
+        let mut stmt = self.conn.prepare("SELECT * from pragma_table_xinfo(?)")?;
+        let rows = stmt.query_map([&self.name], |row| ColumnInfo::from_row(row))?;
+        let mut res = Vec::new();
+        for info_result in rows {
+            res.push(info_result?);
+        }
+        Ok(res)
+    }
+
+    pub fn indices_info(&self) -> Result<Vec<IndexInfo>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT * FROM pragma_index_list(?)"
+        )?;
+        let rows = stmt.query_map([&self.name], |row| IndexInfo::from_row(row))?;
+        let mut res = Vec::new();
+        for result in rows {
+            res.push(result?);
+        }
+        Ok(res)
+    }
+
+    pub fn count_rows(&self) -> Result<u64> {
+        // Formatting SQL like this is bad in general, but we can't give the table
+        // name as a parameter, and we get it from the DB, so it should be OK.
+        self.conn.query_row(
+            &format!("SELECT count(*) from {}", &self.name), [], |r| r.get(0)
+        )
+    }
+}
+
 
 pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")?;
@@ -66,32 +111,4 @@ pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
         table_names.push(name_result?);
     }
     Ok(table_names)
-}
-
-pub fn get_table_indexes(conn: &Connection, table_name: &str) -> Result<Vec<IndexInfo>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM pragma_index_list(?)"
-    )?;
-    let rows = stmt.query_map([table_name], |row| IndexInfo::from_row(row))?;
-    let mut res = Vec::new();
-    for result in rows {
-        res.push(result?);
-    }
-    Ok(res)
-}
-
-pub fn get_index_columns(conn: &Connection, ix_name: &str) -> Result<Vec<String>> {
-    let mut stmt = conn.prepare(
-        "SELECT cid, name from pragma_index_info(?) ORDER BY seqno ASC"
-    )?;
-    let mut rows = stmt.query([ix_name])?;
-    let mut res = Vec::new();
-    while let Some(row) = rows.next()? {
-        res.push(match row.get("cid")? {
-            -1 => "<rowid>".to_string(),
-            -2 => "<expression>".to_string(),
-            _ => row.get("name")?,
-        })
-    }
-    Ok(res)
 }
