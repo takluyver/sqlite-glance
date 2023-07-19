@@ -9,6 +9,7 @@ mod table;
 use table::{
     Table,
     get_table_names,
+    get_view_names,
 };
 
 fn fmt_col_names(names: &[String]) -> String {
@@ -103,6 +104,19 @@ fn main() -> Result<()> {
             }
         }
         println!();
+    }
+
+    // List views
+    for name in get_view_names(&conn)? {
+        // Views and tables are similar enough for this to work
+        let view = Table::new(&name, Rc::clone(&conn));
+
+        println!("{} view ({} rows):",
+                 name.bright_green().bold(), view.count_rows()?);
+
+        for col_info in view.columns_info()? {
+            println!("  {}", col_info.name.cyan());
+        }
     }
     
     Ok(())

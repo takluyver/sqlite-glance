@@ -112,3 +112,15 @@ pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
     }
     Ok(table_names)
 }
+
+
+pub fn get_view_names(conn: &Connection)-> Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT name FROM sqlite_schema WHERE type = 'view'")?;
+    let mut rows = stmt.query([])?; //, |row| (row.get(0)?, row.get(1)?));
+    let mut res = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        res.push(row.get(0)?)
+    }
+    Ok(res)
+}
