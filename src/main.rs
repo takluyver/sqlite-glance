@@ -1,8 +1,14 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
+
+use anyhow;
 use clap::{Arg, Command, value_parser};
-use rusqlite::{Connection, Result, OpenFlags};
+use comfy_table::presets::UTF8_FULL;
+use comfy_table;
+use rusqlite;
+use rusqlite::{Connection, OpenFlags};
+use rusqlite::types::Value;
 use yansi::{Condition, Paint};
 
 mod table;
@@ -24,13 +30,50 @@ fn fmt_col_names(names: &[String]) -> String {
     res
 }
 
-fn main() -> Result<()> {
+fn inspect_table(conn: Rc<Connection>, table: &str) -> anyhow::Result<()> {
+    let count: usize = conn.query_row(
+        "SELECT count(*) FROM sqlite_schema WHERE name=?", [table], |r| r.get(0)
+    )?;
+    if count == 0 {
+        anyhow::bail!("No such table: {}", table);
+    }
+
+    let mut stmt = conn.prepare(&format!("SELECT * FROM {} LIMIT 12", table))?;
+    let ncols = stmt.column_count();
+
+    let mut table = comfy_table::Table::new();
+    table.load_preset(UTF8_FULL).set_header(stmt.column_names());
+
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let mut row_vec = Vec::new();
+        for i in 0..ncols {
+            let val: Value = row.get(i)?;
+            row_vec.push(match val {
+                Value::Null => "".to_string(),
+                Value::Integer(i) => i.to_string(),
+                Value::Real(f) => f.to_string(),
+                Value::Text(s) => s,
+                Value::Blob(_) => "<blob>".to_string(),
+            });
+        }
+        table.add_row(row_vec);
+    }
+    println!("{}", table);
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
     let matches = Command::new("sqlite-glance")
                     .version(env!("CARGO_PKG_VERSION"))
                     .arg(Arg::new("path")
                             .required(true)
                             .help("SQLite file to inspect")
                             .value_parser(value_parser!(PathBuf))
+                        )
+                    .arg(Arg::new("table")
+                            .required(false)
+                            .help("Table or view to inspect")
                         )
                     .get_matches();
 
@@ -40,6 +83,10 @@ fn main() -> Result<()> {
     let conn = Rc::new(Connection::open_with_flags(path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
     )?);
+
+    if let Some(table) = matches.get_one::<String>("table") {
+        return inspect_table(conn,  table);
+    }
 
     let filename = PathBuf::from(path.file_name().unwrap());
     let table_names = get_table_names(&conn)?;
