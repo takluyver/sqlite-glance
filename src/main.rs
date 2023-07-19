@@ -44,21 +44,14 @@ fn show_in_pager(text: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn inspect_table(conn: Rc<Connection>, table: &str) -> anyhow::Result<()> {
-    let count: usize = conn.query_row(
-        "SELECT count(*) FROM sqlite_schema WHERE name=?", [table], |r| r.get(0)
-    )?;
-    if count == 0 {
-        anyhow::bail!("No such table: {}", table);
-    }
-
-    let mut stmt = conn.prepare(&format!("SELECT * FROM {} LIMIT 12", table))?;
+fn inspect_table(db_table: Table) -> anyhow::Result<()> {
+    let mut stmt = db_table.sample_query()?;
     let ncols = stmt.column_count();
 
     let mut table = comfy_table::Table::new();
     table.load_preset(UTF8_FULL).set_header(stmt.column_names());
 
-    let mut rows = stmt.query([])?;
+    let mut rows = stmt.query([12])?;
     while let Some(row) = rows.next()? {
         let mut row_vec = Vec::new();
         for i in 0..ncols {
@@ -113,8 +106,12 @@ fn main() -> anyhow::Result<()> {
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
     )?);
 
-    if let Some(table) = matches.get_one::<String>("table") {
-        return inspect_table(conn,  table);
+    if let Some(table_name) = matches.get_one::<String>("table") {
+        let table = Table::new(table_name, Rc::clone(&conn));
+        if !table.in_db()? {
+            anyhow::bail!("No such table: {}", table_name);
+        }
+        return inspect_table(table);
     }
 
     let filename = PathBuf::from(path.file_name().unwrap());
@@ -145,7 +142,7 @@ fn main() -> anyhow::Result<()> {
         }
         let nrows = table.count_rows()?;
 
-        println!("{} table ({} rows):", tbl.bright_green().bold(), nrows);
+        println!("{} table ({} rows):", table.escaped_name().bright_green().bold(), nrows);
 
         // Columns info
         for col_info in table.columns_info()? {
@@ -188,7 +185,7 @@ fn main() -> anyhow::Result<()> {
         let view = Table::new(&name, Rc::clone(&conn));
 
         println!("{} view ({} rows):",
-                 name.bright_green().bold(), view.count_rows()?);
+                 view.escaped_name().bright_green().bold(), view.count_rows()?);
 
         for col_info in view.columns_info()? {
             println!("  {}", col_info.name.cyan());

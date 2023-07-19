@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusqlite::{Connection, Result, Row};
+use rusqlite::{Connection, Result, Row, Statement};
 
 #[derive(Debug)]
 pub struct ColumnInfo {
@@ -71,6 +71,14 @@ impl Table {
         }
     }
 
+    pub fn in_db(&self) -> Result<bool> {
+        let count: usize = self.conn.query_row(
+            "SELECT count(*) FROM sqlite_schema WHERE name=?",
+            [&self.name], |r| r.get(0)
+        )?;
+        Ok(count > 0)
+    }
+
     pub fn columns_info(&self) -> Result<Vec<ColumnInfo>> {
         let mut stmt = self.conn.prepare("SELECT * from pragma_table_xinfo(?)")?;
         let rows = stmt.query_map([&self.name], |row| ColumnInfo::from_row(row))?;
@@ -93,12 +101,29 @@ impl Table {
         Ok(res)
     }
 
+    pub fn escaped_name(&self) -> String {
+        // SQLite actually allows $ and any non-ascii character in identifiers
+        // without quoting, but this more restrictive rule is OK for now.
+        // https://www.sqlite.org/draft/tokenreq.html
+        if self.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            self.name.clone()
+        } else {
+            format!("\"{}\"", &self.name.replace('"', "\"\""))
+        }
+    }
+
+    // Building SQL queries with string formatting is not great, but we can't
+    // give the table name as a parameter. Quoting the name *should* work.
+
     pub fn count_rows(&self) -> Result<u64> {
-        // Formatting SQL like this is bad in general, but we can't give the table
-        // name as a parameter, and we get it from the DB, so it should be OK.
         self.conn.query_row(
-            &format!("SELECT count(*) from {}", &self.name), [], |r| r.get(0)
+            &format!("SELECT count(*) from {}", &self.escaped_name()), [], |r| r.get(0)
         )
+    }
+
+    pub fn sample_query(&self) -> Result<Statement> {
+        Ok(self.conn.prepare(&format!("SELECT * FROM {} LIMIT ?",
+                                      self.escaped_name()))?)
     }
 }
 
