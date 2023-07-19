@@ -71,6 +71,7 @@ impl Table {
         }
     }
 
+    /// Does a table/view with this name exist in the database?
     pub fn in_db(&self) -> Result<bool> {
         let count: usize = self.conn.query_row(
             "SELECT count(*) FROM pragma_table_list WHERE name=?",
@@ -97,7 +98,8 @@ impl Table {
         Ok(res)
     }
 
-    pub fn indices_info(&self) -> Result<Vec<IndexInfo>> {
+    /// Get information about indexes on this table
+    pub fn indexes_info(&self) -> Result<Vec<IndexInfo>> {
         let mut stmt = self.conn.prepare(
             "SELECT * FROM pragma_index_list(?)"
         )?;
@@ -109,6 +111,7 @@ impl Table {
         Ok(res)
     }
 
+    /// Quote the table name if needed to ensure it's a valid identifier
     pub fn escaped_name(&self) -> String {
         // SQLite actually allows $ and any non-ascii character in identifiers
         // without quoting, but this more restrictive rule is OK for now.
@@ -136,6 +139,7 @@ impl Table {
 }
 
 
+/// Get the names of all tables in the database
 pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")?;
     let rows = stmt.query_map([], |row| row.get(0))?;
@@ -147,9 +151,10 @@ pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
 }
 
 
+/// Get the names of all views in the database
 pub fn get_view_names(conn: &Connection)-> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT name FROM sqlite_schema WHERE type = 'view'")?;
-    let mut rows = stmt.query([])?; //, |row| (row.get(0)?, row.get(1)?));
+    let mut rows = stmt.query([])?;
     let mut res = Vec::new();
 
     while let Some(row) = rows.next()? {

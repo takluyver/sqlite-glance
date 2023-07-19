@@ -45,6 +45,8 @@ fn show_in_pager(text: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Show sample rows from one SQLite table
+/// Main implementation for `sqlite-glance file.db table`
 fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
     let mut output = String::new();
     writeln!(output, "{}: {} {}", filename.display(),
@@ -76,8 +78,9 @@ fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
     writeln!(output, "{} of {} rows", nrows, db_table.count_rows()?)?;
 
     if std::io::stdout().is_tty() {
-        // Crude way to figure out how much space the table takes
+        // Crude way to figure out how much space the output takes
         let out_height = output.lines().count();
+        // 2nd line (nth(1)) is top of table: ┌───┬─ ...
         let tbl_width = output.lines().nth(1).unwrap().chars().count();
 
         let (term_cols, term_rows) = crossterm::terminal::size()?;
@@ -131,10 +134,10 @@ fn main() -> anyhow::Result<()> {
         let table = Table::new(&tbl, Rc::clone(&conn));
 
         let mut cols_unique = HashSet::new();  // Columns to label UNIQUE
-        let mut cols_w_index = HashSet::new(); // 1-column indices, not unique
+        let mut cols_w_index = HashSet::new(); // 1-column indexes, not unique
         let mut pk_cols = Vec::new();         // Columns in the primary key
         let mut other_indexes = Vec::new();  // Indexes we'll list
-        for ix in table.indices_info()? {
+        for ix in table.indexes_info()? {
             let cols = ix.column_names(&conn)?;
             if ix.origin == "pk" {
                 pk_cols = cols
