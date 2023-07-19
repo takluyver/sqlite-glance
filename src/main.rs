@@ -1,11 +1,14 @@
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::PathBuf;
+use std::process;
 use std::rc::Rc;
 
 use anyhow;
 use clap::{Arg, Command, value_parser};
 use comfy_table::presets::UTF8_FULL;
 use comfy_table;
+use crossterm::tty::IsTty;
 use rusqlite;
 use rusqlite::{Connection, OpenFlags};
 use rusqlite::types::Value;
@@ -28,6 +31,17 @@ fn fmt_col_names(names: &[String]) -> String {
         }
     }
     res
+}
+
+fn show_in_pager(text: &str) -> std::io::Result<()> {
+    let mut pager_proc = process::Command::new("less")
+            .arg("-SR")
+            .stdin(process::Stdio::piped())
+            .spawn()?;
+
+    pager_proc.stdin.take().unwrap().write_all(text.as_bytes())?;
+    pager_proc.wait()?;
+    Ok(())
 }
 
 fn inspect_table(conn: Rc<Connection>, table: &str) -> anyhow::Result<()> {
@@ -59,7 +73,22 @@ fn inspect_table(conn: Rc<Connection>, table: &str) -> anyhow::Result<()> {
         }
         table.add_row(row_vec);
     }
-    println!("{}", table);
+    if std::io::stdout().is_tty() {
+        // Crude way to figure out how much space the table takes
+        let table_s = format!("{}", table);
+        let tbl_height = table_s.lines().count();
+        let tbl_width = table_s.lines().nth(0).unwrap().chars().count();
+
+        let (term_cols, term_rows) = crossterm::terminal::size()?;
+        if (tbl_width > term_cols.into()) || (tbl_height > term_rows.into()) {
+            show_in_pager(&table_s)?;
+        } else {
+            println!("{}", table_s);
+        }
+    } else {
+        println!("{}", table);
+    }
+
     Ok(())
 }
 
