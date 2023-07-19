@@ -1,6 +1,7 @@
 use std::collections::HashSet;
-use std::io::Write;
-use std::path::PathBuf;
+use std::fmt::Write as _;
+use std::io::Write as _;
+use std::path::{PathBuf, Path};
 use std::process;
 use std::rc::Rc;
 
@@ -44,7 +45,10 @@ fn show_in_pager(text: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn inspect_table(db_table: Table) -> anyhow::Result<()> {
+fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
+    let mut output = String::new();
+    writeln!(output, "{}: {} {}", filename.display(),
+                db_table.escaped_name().bright_green().bold(), db_table.obj_type()?)?;
     let mut stmt = db_table.sample_query()?;
     let ncols = stmt.column_count();
 
@@ -52,6 +56,7 @@ fn inspect_table(db_table: Table) -> anyhow::Result<()> {
     table.load_preset(UTF8_FULL).set_header(stmt.column_names());
 
     let mut rows = stmt.query([12])?;
+    let mut nrows: usize = 0;
     while let Some(row) = rows.next()? {
         let mut row_vec = Vec::new();
         for i in 0..ncols {
@@ -65,21 +70,24 @@ fn inspect_table(db_table: Table) -> anyhow::Result<()> {
             });
         }
         table.add_row(row_vec);
+        nrows += 1;
     }
+    writeln!(output, "{}", table)?;
+    writeln!(output, "{} of {} rows", nrows, db_table.count_rows()?)?;
+
     if std::io::stdout().is_tty() {
         // Crude way to figure out how much space the table takes
-        let table_s = format!("{}", table);
-        let tbl_height = table_s.lines().count();
-        let tbl_width = table_s.lines().nth(0).unwrap().chars().count();
+        let out_height = output.lines().count();
+        let tbl_width = output.lines().nth(1).unwrap().chars().count();
 
         let (term_cols, term_rows) = crossterm::terminal::size()?;
-        if (tbl_width > term_cols.into()) || (tbl_height > term_rows.into()) {
-            show_in_pager(&table_s)?;
+        if (tbl_width > term_cols.into()) || (out_height > term_rows.into()) {
+            show_in_pager(&output)?;
         } else {
-            println!("{}", table_s);
+            println!("{}", output);
         }
     } else {
-        println!("{}", table);
+        println!("{}", output);
     }
 
     Ok(())
@@ -102,6 +110,7 @@ fn main() -> anyhow::Result<()> {
     yansi::whenever(Condition::TTY_AND_COLOR);
 
     let path = matches.get_one::<PathBuf>("path").unwrap();
+    let filename = PathBuf::from(path.file_name().unwrap());
     let conn = Rc::new(Connection::open_with_flags(path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
     )?);
@@ -111,10 +120,9 @@ fn main() -> anyhow::Result<()> {
         if !table.in_db()? {
             anyhow::bail!("No such table: {}", table_name);
         }
-        return inspect_table(table);
+        return inspect_table(table, &filename);
     }
 
-    let filename = PathBuf::from(path.file_name().unwrap());
     let table_names = get_table_names(&conn)?;
     println!("{} — {} tables", filename.display().bold(), table_names.len());
     println!();

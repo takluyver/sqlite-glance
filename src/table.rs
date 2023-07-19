@@ -73,10 +73,18 @@ impl Table {
 
     pub fn in_db(&self) -> Result<bool> {
         let count: usize = self.conn.query_row(
-            "SELECT count(*) FROM sqlite_schema WHERE name=?",
+            "SELECT count(*) FROM pragma_table_list WHERE name=?",
             [&self.name], |r| r.get(0)
         )?;
         Ok(count > 0)
+    }
+
+    /// 'table' or 'view'
+    pub fn obj_type(&self) -> Result<String> {
+        Ok(self.conn.query_row(
+            "SELECT type FROM pragma_table_list WHERE name=?",
+            [&self.name], |r| r.get(0)
+        )?)
     }
 
     pub fn columns_info(&self) -> Result<Vec<ColumnInfo>> {
