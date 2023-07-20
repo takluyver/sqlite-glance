@@ -1,26 +1,22 @@
 use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::io::Write as _;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::process;
 use std::rc::Rc;
 
 use anyhow;
-use clap::{Arg, Command, value_parser};
-use comfy_table::presets::UTF8_FULL;
+use clap::{value_parser, Arg, Command};
 use comfy_table;
+use comfy_table::presets::UTF8_FULL;
 use crossterm::tty::IsTty;
 use rusqlite;
-use rusqlite::{Connection, OpenFlags};
 use rusqlite::types::Value;
+use rusqlite::{Connection, OpenFlags};
 use yansi::{Condition, Paint};
 
 mod table;
-use table::{
-    Table,
-    get_table_names,
-    get_view_names,
-};
+use table::{get_table_names, get_view_names, Table};
 
 fn fmt_col_names(names: &[String]) -> String {
     let mut res = String::new();
@@ -36,11 +32,15 @@ fn fmt_col_names(names: &[String]) -> String {
 
 fn show_in_pager(text: &str) -> std::io::Result<()> {
     let mut pager_proc = process::Command::new("less")
-            .arg("-SR")
-            .stdin(process::Stdio::piped())
-            .spawn()?;
+        .arg("-SR")
+        .stdin(process::Stdio::piped())
+        .spawn()?;
 
-    pager_proc.stdin.take().unwrap().write_all(text.as_bytes())?;
+    pager_proc
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(text.as_bytes())?;
     pager_proc.wait()?;
     Ok(())
 }
@@ -49,8 +49,13 @@ fn show_in_pager(text: &str) -> std::io::Result<()> {
 /// Main implementation for `sqlite-glance file.db table`
 fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
     let mut output = String::new();
-    writeln!(output, "{}: {} {}", filename.display(),
-                db_table.escaped_name().bright_green().bold(), db_table.obj_type()?)?;
+    writeln!(
+        output,
+        "{}: {} {}",
+        filename.display(),
+        db_table.escaped_name().bright_green().bold(),
+        db_table.obj_type()?
+    )?;
     let mut stmt = db_table.sample_query()?;
     let ncols = stmt.column_count();
 
@@ -98,24 +103,27 @@ fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     let matches = Command::new("sqlite-glance")
-                    .version(env!("CARGO_PKG_VERSION"))
-                    .arg(Arg::new("path")
-                            .required(true)
-                            .help("SQLite file to inspect")
-                            .value_parser(value_parser!(PathBuf))
-                        )
-                    .arg(Arg::new("table")
-                            .required(false)
-                            .help("Table or view to inspect")
-                        )
-                    .get_matches();
+        .version(env!("CARGO_PKG_VERSION"))
+        .arg(
+            Arg::new("path")
+                .required(true)
+                .help("SQLite file to inspect")
+                .value_parser(value_parser!(PathBuf)),
+        )
+        .arg(
+            Arg::new("table")
+                .required(false)
+                .help("Table or view to inspect"),
+        )
+        .get_matches();
 
     yansi::whenever(Condition::TTY_AND_COLOR);
 
     let path = matches.get_one::<PathBuf>("path").unwrap();
     let filename = PathBuf::from(path.file_name().unwrap());
-    let conn = Rc::new(Connection::open_with_flags(path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX
+    let conn = Rc::new(Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?);
 
     if let Some(table_name) = matches.get_one::<String>("table") {
@@ -127,16 +135,20 @@ fn main() -> anyhow::Result<()> {
     }
 
     let table_names = get_table_names(&conn)?;
-    println!("{} — {} tables", filename.display().bold(), table_names.len());
+    println!(
+        "{} — {} tables",
+        filename.display().bold(),
+        table_names.len()
+    );
     println!();
 
     for tbl in table_names {
         let table = Table::new(&tbl, Rc::clone(&conn));
 
-        let mut cols_unique = HashSet::new();  // Columns to label UNIQUE
+        let mut cols_unique = HashSet::new(); // Columns to label UNIQUE
         let mut cols_w_index = HashSet::new(); // 1-column indexes, not unique
-        let mut pk_cols = Vec::new();         // Columns in the primary key
-        let mut other_indexes = Vec::new();  // Indexes we'll list
+        let mut pk_cols = Vec::new(); // Columns in the primary key
+        let mut other_indexes = Vec::new(); // Indexes we'll list
         for ix in table.indexes_info()? {
             let cols = ix.column_names(&conn)?;
             if ix.origin == "pk" {
@@ -153,7 +165,11 @@ fn main() -> anyhow::Result<()> {
         }
         let nrows = table.count_rows()?;
 
-        println!("{} table ({} rows):", table.escaped_name().bright_green().bold(), nrows);
+        println!(
+            "{} table ({} rows):",
+            table.escaped_name().bright_green().bold(),
+            nrows
+        );
 
         // Columns info
         for col_info in table.columns_info()? {
@@ -176,7 +192,7 @@ fn main() -> anyhow::Result<()> {
         if pk_cols.len() > 1 {
             println!("PRIMARY KEY ({})", fmt_col_names(&pk_cols));
         }
-        
+
         if !other_indexes.is_empty() {
             println!("Indexes:");
             for (ix, cols) in other_indexes {
@@ -195,13 +211,16 @@ fn main() -> anyhow::Result<()> {
         // Views and tables are similar enough for this to work
         let view = Table::new(&name, Rc::clone(&conn));
 
-        println!("{} view ({} rows):",
-                 view.escaped_name().bright_green().bold(), view.count_rows()?);
+        println!(
+            "{} view ({} rows):",
+            view.escaped_name().bright_green().bold(),
+            view.count_rows()?
+        );
 
         for col_info in view.columns_info()? {
             println!("  {}", col_info.name.cyan());
         }
     }
-    
+
     Ok(())
 }

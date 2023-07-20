@@ -42,9 +42,8 @@ impl IndexInfo {
     }
 
     pub fn column_names(&self, conn: &Connection) -> Result<Vec<String>> {
-        let mut stmt = conn.prepare(
-            "SELECT cid, name from pragma_index_info(?) ORDER BY seqno ASC"
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT cid, name from pragma_index_info(?) ORDER BY seqno ASC")?;
         let mut rows = stmt.query([&self.name])?;
         let mut res = Vec::new();
         while let Some(row) = rows.next()? {
@@ -75,7 +74,8 @@ impl Table {
     pub fn in_db(&self) -> Result<bool> {
         let count: usize = self.conn.query_row(
             "SELECT count(*) FROM pragma_table_list WHERE name=?",
-            [&self.name], |r| r.get(0)
+            [&self.name],
+            |r| r.get(0),
         )?;
         Ok(count > 0)
     }
@@ -84,7 +84,8 @@ impl Table {
     pub fn obj_type(&self) -> Result<String> {
         Ok(self.conn.query_row(
             "SELECT type FROM pragma_table_list WHERE name=?",
-            [&self.name], |r| r.get(0)
+            [&self.name],
+            |r| r.get(0),
         )?)
     }
 
@@ -100,9 +101,7 @@ impl Table {
 
     /// Get information about indexes on this table
     pub fn indexes_info(&self) -> Result<Vec<IndexInfo>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT * FROM pragma_index_list(?)"
-        )?;
+        let mut stmt = self.conn.prepare("SELECT * FROM pragma_index_list(?)")?;
         let rows = stmt.query_map([&self.name], |row| IndexInfo::from_row(row))?;
         let mut res = Vec::new();
         for result in rows {
@@ -116,7 +115,11 @@ impl Table {
         // SQLite actually allows $ and any non-ascii character in identifiers
         // without quoting, but this more restrictive rule is OK for now.
         // https://www.sqlite.org/draft/tokenreq.html
-        if self.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        if self
+            .name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
             self.name.clone()
         } else {
             format!("\"{}\"", &self.name.replace('"', "\"\""))
@@ -128,16 +131,18 @@ impl Table {
 
     pub fn count_rows(&self) -> Result<u64> {
         self.conn.query_row(
-            &format!("SELECT count(*) from {}", &self.escaped_name()), [], |r| r.get(0)
+            &format!("SELECT count(*) from {}", &self.escaped_name()),
+            [],
+            |r| r.get(0),
         )
     }
 
     pub fn sample_query(&self) -> Result<Statement> {
-        Ok(self.conn.prepare(&format!("SELECT * FROM {} LIMIT ?",
-                                      self.escaped_name()))?)
+        Ok(self
+            .conn
+            .prepare(&format!("SELECT * FROM {} LIMIT ?", self.escaped_name()))?)
     }
 }
-
 
 /// Get the names of all tables in the database
 pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
@@ -150,9 +155,8 @@ pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
     Ok(table_names)
 }
 
-
 /// Get the names of all views in the database
-pub fn get_view_names(conn: &Connection)-> Result<Vec<String>> {
+pub fn get_view_names(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT name FROM sqlite_schema WHERE type = 'view'")?;
     let mut rows = stmt.query([])?;
     let mut res = Vec::new();
