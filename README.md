@@ -12,7 +12,10 @@ Usage:
 
 ```
 sqlite-glance my_db.sqlite
+
+sqlite-glance my_db.sqlite table
 ```
 
-For now this simply shows the structure of tables & indexes in the file.
-More features are planned.
+With only one argument, it presents the database structure in a (hopefully)
+readable format.
+Given a table (or view) name, it will show the contents of the first few rows.
