@@ -2,7 +2,7 @@
 name = "sqlite-glance"
 description = "Conveniently inspect an SQLite database file in the terminal"
 readme = "README.md"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = [
     "Thomas Kluyver <thomas.kluyver@xfel.eu>",
