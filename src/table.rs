@@ -2,6 +2,8 @@ use std::rc::Rc;
 
 use rusqlite::{Connection, Result, Row, Statement};
 
+mod keywords;
+
 #[derive(Debug)]
 pub struct ColumnInfo {
     pub name: String,
@@ -119,6 +121,7 @@ impl Table {
             .name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && !keywords::is_keyword(&self.name)
         {
             self.name.clone()
         } else {
