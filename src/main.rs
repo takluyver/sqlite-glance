@@ -164,6 +164,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         let nrows = table.count_rows()?;
+        let foreign_keys = table.foreign_key_info()?;
 
         println!(
             "{} table ({} rows):",
@@ -180,17 +181,35 @@ fn main() -> anyhow::Result<()> {
             if col_info.notnull {
                 print!(" NOT NULL")
             }
-            if col_info.pk > 0 && pk_cols.len() == 1 {
+            // Show primary key on column if it's a PK by itself.
+            // pk_cols may be empty for integer PKs.
+            if col_info.pk > 0 && pk_cols.len() < 1 {
                 print!(" PRIMARY KEY");
             } else if cols_unique.contains(&col_info.name) {
                 print!(" UNIQUE")
             } else if cols_w_index.contains(&col_info.name) {
                 print!(" indexed")
             }
+            // Show if column is a foreign key by itself
+            if let Some(fk_info) = foreign_keys.for_name(&col_info.name) {
+                print!(" REFERENCES {}", fk_info.to_table.bright_green());
+                if &fk_info.to != &[""] {
+                    print!(" ({})", fmt_col_names(&fk_info.to));
+                }
+            }
             println!();
         }
         if pk_cols.len() > 1 {
             println!("PRIMARY KEY ({})", fmt_col_names(&pk_cols));
+        }
+
+        for fk_info in foreign_keys.multicolumn() {
+            println!(
+                "FOREIGN KEY ({}) REFERENCES {} ({})",
+                fmt_col_names(&fk_info.from),
+                &fk_info.to_table.bright_green(),
+                fmt_col_names(&fk_info.to)
+            )
         }
 
         if !other_indexes.is_empty() {

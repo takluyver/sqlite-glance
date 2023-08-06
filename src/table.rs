@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusqlite::{Connection, Result, Row, Statement};
+use rusqlite::{Connection, Result, Row, Rows, Statement};
 
 mod keywords;
 
@@ -59,6 +59,76 @@ impl IndexInfo {
     }
 }
 
+#[derive(Clone)]
+pub struct ForeignKeyInfo {
+    pub to_table: String,
+    pub from: Vec<String>,
+    pub to: Vec<String>,
+    pub on_update: String,
+    pub on_delete: String,
+}
+
+impl ForeignKeyInfo {
+    fn new() -> ForeignKeyInfo {
+        return ForeignKeyInfo {
+            to_table: "".to_string(),
+            from: Vec::new(),
+            to: Vec::new(),
+            on_update: "NO ACTION".to_string(),
+            on_delete: "NO ACTION".to_string(),
+        };
+    }
+}
+
+pub struct ForeignKeys {
+    pub list: Vec<ForeignKeyInfo>,
+}
+
+impl ForeignKeys {
+    fn from_rows(mut rows: Rows) -> Result<ForeignKeys> {
+        let mut l = Vec::new();
+        let mut current_id = 0;
+        let mut current = ForeignKeyInfo::new();
+        while let Some(row) = rows.next()? {
+            let id: i32 = row.get("id")?;
+            if id != current_id {
+                l.push(current);
+                current = ForeignKeyInfo::new();
+                current_id = id;
+            }
+            current.to_table = row.get("table")?;
+            current.from.push(row.get("from")?);
+            let to: Option<String> = row.get("to")?;
+            current.to.push(to.unwrap_or("".to_string()));
+            current.on_update = row.get("on_update")?;
+            current.on_delete = row.get("on_delete")?;
+        }
+        if current.from.len() > 0 {
+            l.push(current);
+        }
+        Ok(ForeignKeys { list: l })
+    }
+
+    pub fn for_name(&self, name: &str) -> Option<ForeignKeyInfo> {
+        for fk in &self.list {
+            if fk.from.len() == 1 && &fk.from[0] == name {
+                return Some(fk.clone());
+            }
+        }
+        None
+    }
+
+    pub fn multicolumn(&self) -> Vec<ForeignKeyInfo> {
+        let mut res = Vec::new();
+        for fk in &self.list {
+            if fk.from.len() > 1 {
+                res.push(fk.clone())
+            }
+        }
+        res
+    }
+}
+
 pub struct Table {
     pub name: String,
     pub conn: Rc<Connection>,
@@ -110,6 +180,14 @@ impl Table {
             res.push(result?);
         }
         Ok(res)
+    }
+
+    pub fn foreign_key_info(&self) -> Result<ForeignKeys> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT * FROM pragma_foreign_key_list(?)")?;
+        let rows = stmt.query([&self.name])?;
+        ForeignKeys::from_rows(rows)
     }
 
     /// Quote the table name if needed to ensure it's a valid identifier
