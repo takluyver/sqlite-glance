@@ -47,7 +47,12 @@ fn show_in_pager(text: &str) -> std::io::Result<()> {
 
 /// Show sample rows from one SQLite table
 /// Main implementation for `sqlite-glance file.db table`
-fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
+fn inspect_table(
+    db_table: Table,
+    filename: &Path,
+    where_clause: Option<&str>,
+    limit: &u32,
+) -> anyhow::Result<()> {
     let mut output = String::new();
     writeln!(
         output,
@@ -56,13 +61,22 @@ fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
         db_table.escaped_name().bright_green().bold(),
         db_table.obj_type()?
     )?;
-    let mut stmt = db_table.sample_query()?;
+
+    let mut stmt = db_table.conn.prepare(&format!(
+        "SELECT * FROM {} {} LIMIT ?",
+        db_table.escaped_name(),
+        if let Some(w) = where_clause {
+            format!("WHERE {}", w)
+        } else {
+            "".to_string()
+        },
+    ))?;
     let ncols = stmt.column_count();
 
     let mut table = comfy_table::Table::new();
     table.load_preset(UTF8_FULL).set_header(stmt.column_names());
 
-    let mut rows = stmt.query([12])?;
+    let mut rows = stmt.query([limit])?;
     let mut nrows: usize = 0;
     while let Some(row) = rows.next()? {
         let mut row_vec = Vec::new();
@@ -80,7 +94,26 @@ fn inspect_table(db_table: Table, filename: &Path) -> anyhow::Result<()> {
         nrows += 1;
     }
     writeln!(output, "{}", table)?;
-    writeln!(output, "{} of {} rows", nrows, db_table.count_rows()?)?;
+    if let Some(w) = where_clause {
+        let nsel: u64 = db_table.conn.query_row(
+            &format!(
+                "SELECT count(*) from {} WHERE {}",
+                db_table.escaped_name(),
+                w
+            ),
+            [],
+            |r| r.get(0),
+        )?;
+        writeln!(
+            output,
+            "{} of {} selected rows (of {} in table)",
+            nrows,
+            nsel,
+            db_table.count_rows()?
+        )?;
+    } else {
+        writeln!(output, "{} of {} rows", nrows, db_table.count_rows()?)?;
+    }
 
     if std::io::stdout().is_tty() {
         // Crude way to figure out how much space the output takes
@@ -115,6 +148,20 @@ fn main() -> anyhow::Result<()> {
                 .required(false)
                 .help("Table or view to inspect"),
         )
+        .arg(
+            Arg::new("where")
+                .short('w')
+                .long("where")
+                .help("WHERE clause to select rows in table view"),
+        )
+        .arg(
+            Arg::new("limit")
+                .short('n')
+                .long("limit")
+                .default_value("12")
+                .value_parser(value_parser!(u32))
+                .help("Maximum number of rows to show in table view"),
+        )
         .get_matches();
 
     yansi::whenever(Condition::TTY_AND_COLOR);
@@ -131,7 +178,9 @@ fn main() -> anyhow::Result<()> {
         if !table.in_db()? {
             anyhow::bail!("No such table: {}", table_name);
         }
-        return inspect_table(table, &filename);
+        let where_cl = matches.get_one::<String>("where").map(|x| x.as_str());
+        let limit = matches.get_one::<u32>("limit").unwrap();
+        return inspect_table(table, &filename, where_cl, limit);
     }
 
     let table_names = get_table_names(&conn)?;

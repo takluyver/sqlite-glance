@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rusqlite::{Connection, Result, Row, Rows, Statement};
+use rusqlite::{Connection, Result, Row, Rows};
 
 mod keywords;
 
@@ -216,12 +216,6 @@ impl Table {
             [],
             |r| r.get(0),
         )
-    }
-
-    pub fn sample_query(&self) -> Result<Statement> {
-        Ok(self
-            .conn
-            .prepare(&format!("SELECT * FROM {} LIMIT ?", self.escaped_name()))?)
     }
 }
 
