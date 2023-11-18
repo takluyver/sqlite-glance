@@ -134,55 +134,7 @@ fn inspect_table(
     Ok(())
 }
 
-fn main() -> anyhow::Result<()> {
-    let matches = Command::new("sqlite-glance")
-        .version(env!("CARGO_PKG_VERSION"))
-        .arg(
-            Arg::new("path")
-                .required(true)
-                .help("SQLite file to inspect")
-                .value_parser(value_parser!(PathBuf)),
-        )
-        .arg(
-            Arg::new("table")
-                .required(false)
-                .help("Table or view to inspect"),
-        )
-        .arg(
-            Arg::new("where")
-                .short('w')
-                .long("where")
-                .help("WHERE clause to select rows in table view"),
-        )
-        .arg(
-            Arg::new("limit")
-                .short('n')
-                .long("limit")
-                .default_value("12")
-                .value_parser(value_parser!(u32))
-                .help("Maximum number of rows to show in table view"),
-        )
-        .get_matches();
-
-    yansi::whenever(Condition::TTY_AND_COLOR);
-
-    let path = matches.get_one::<PathBuf>("path").unwrap();
-    let filename = PathBuf::from(path.file_name().unwrap());
-    let conn = Rc::new(Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?);
-
-    if let Some(table_name) = matches.get_one::<String>("table") {
-        let table = Table::new(table_name, Rc::clone(&conn));
-        if !table.in_db()? {
-            anyhow::bail!("No such table: {}", table_name);
-        }
-        let where_cl = matches.get_one::<String>("where").map(|x| x.as_str());
-        let limit = matches.get_one::<u32>("limit").unwrap();
-        return inspect_table(table, &filename, where_cl, limit);
-    }
-
+fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
     let table_names = get_table_names(&conn)?;
     println!(
         "{} — {} tables",
@@ -291,4 +243,58 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
+    let matches = Command::new("sqlite-glance")
+        .version(env!("CARGO_PKG_VERSION"))
+        .arg(
+            Arg::new("path")
+                .required(true)
+                .help("SQLite file to inspect")
+                .value_parser(value_parser!(PathBuf)),
+        )
+        .arg(
+            Arg::new("table")
+                .required(false)
+                .help("Table or view to inspect"),
+        )
+        .arg(
+            Arg::new("where")
+                .short('w')
+                .long("where")
+                .help("WHERE clause to select rows in table view"),
+        )
+        .arg(
+            Arg::new("limit")
+                .short('n')
+                .long("limit")
+                .default_value("12")
+                .value_parser(value_parser!(u32))
+                .help("Maximum number of rows to show in table view"),
+        )
+        .get_matches();
+
+    yansi::whenever(Condition::TTY_AND_COLOR);
+
+    let path = matches.get_one::<PathBuf>("path").unwrap();
+    let filename = PathBuf::from(path.file_name().unwrap());
+    let conn = Rc::new(Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?);
+
+    if let Some(table_name) = matches.get_one::<String>("table") {
+        // Table/view name specified - show data
+        let table = Table::new(table_name, Rc::clone(&conn));
+        if !table.in_db()? {
+            anyhow::bail!("No such table: {}", table_name);
+        }
+        let where_cl = matches.get_one::<String>("where").map(|x| x.as_str());
+        let limit = matches.get_one::<u32>("limit").unwrap();
+        inspect_table(table, &filename, where_cl, limit)
+    } else {
+        // No table specified - show DB schema
+        inspect_schema(conn, &filename)
+    }
 }
