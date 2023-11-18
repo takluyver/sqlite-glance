@@ -13,6 +13,9 @@ use crossterm::tty::IsTty;
 use rusqlite;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OpenFlags};
+use sqlparser::ast::Statement;
+use sqlparser::dialect::SQLiteDialect;
+use sqlparser::parser::Parser;
 use yansi::{Condition, Paint};
 
 mod table;
@@ -244,6 +247,16 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
 
         for col_info in view.columns_info()? {
             writeln!(output, "  {}", col_info.name.cyan())?;
+        }
+
+        // Find the 'AS SELECT' clause for this view
+        let create_sql: String =
+            conn.query_row("SELECT sql from sqlite_schema WHERE name=?", [&name], |r| {
+                r.get(0)
+            })?;
+        let ast = Parser::parse_sql(&SQLiteDialect {}, &create_sql)?;
+        if let Some(Statement::CreateView { query: q, .. }) = ast.first() {
+            writeln!(output, "AS {q}")?;
         }
     }
 
