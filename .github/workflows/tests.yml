@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   test:
-    name: Test `cargo check/test/build``
+    name: cargo check & test
     runs-on: ubuntu-latest
 
     env:
@@ -20,4 +20,3 @@ jobs:
       - run: |
           cargo check
           cargo test
-          cargo build --release
