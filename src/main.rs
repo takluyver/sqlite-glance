@@ -250,11 +250,7 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
         }
 
         // Find the 'AS SELECT' clause for this view
-        let create_sql: String =
-            conn.query_row("SELECT sql from sqlite_schema WHERE name=?", [&name], |r| {
-                r.get(0)
-            })?;
-        let ast = Parser::parse_sql(&SQLiteDialect {}, &create_sql)?;
+        let ast = Parser::parse_sql(&SQLiteDialect {}, &view.create_sql()?)?;
         if let Some(Statement::CreateView { query: q, .. }) = ast.first() {
             writeln!(output, "AS {q}")?;
         }

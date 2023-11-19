@@ -161,6 +161,15 @@ impl Table {
         )?)
     }
 
+    /// Get the CREATE TABLE / CREATE VIEW statement for this object
+    pub fn create_sql(&self) -> Result<String> {
+        Ok(self.conn.query_row(
+            "SELECT sql from sqlite_schema WHERE name=?",
+            [&self.name],
+            |r| r.get(0),
+        )?)
+    }
+
     pub fn columns_info(&self) -> Result<Vec<ColumnInfo>> {
         let mut stmt = self.conn.prepare("SELECT * from pragma_table_xinfo(?)")?;
         let rows = stmt.query_map([&self.name], |row| ColumnInfo::from_row(row))?;
