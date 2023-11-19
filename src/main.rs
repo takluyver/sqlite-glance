@@ -204,6 +204,13 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
                     write!(output, " ({})", fmt_col_names(&fk_info.to))?;
                 }
             }
+            // TODO: Show expression for generated columns
+            // See sqlparser-rs issues #743 & #1050
+            if col_info.hidden == 2 {
+                write!(output," GENERATED VIRTUAL")?;
+            } else if col_info.hidden == 3 {
+                write!(output," GENERATED STORED")?;
+            }
             writeln!(output)?;
         }
         if pk_cols.len() > 1 {
