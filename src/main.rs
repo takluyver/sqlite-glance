@@ -207,9 +207,9 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
             // TODO: Show expression for generated columns
             // See sqlparser-rs issues #743 & #1050
             if col_info.hidden == 2 {
-                write!(output," GENERATED VIRTUAL")?;
+                write!(output, " GENERATED VIRTUAL")?;
             } else if col_info.hidden == 3 {
-                write!(output," GENERATED STORED")?;
+                write!(output, " GENERATED STORED")?;
             }
             writeln!(output)?;
         }

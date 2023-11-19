@@ -3,6 +3,7 @@ use std::rc::Rc;
 use rusqlite::{Connection, Result, Row, Rows};
 
 mod keywords;
+mod tests;
 
 #[derive(Debug)]
 pub struct ColumnInfo {
@@ -59,7 +60,7 @@ impl IndexInfo {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ForeignKeyInfo {
     pub to_table: String,
     pub from: Vec<String>,
