@@ -9,6 +9,7 @@ const SCHEMA: &str = r#"
 CREATE TABLE t1 (
     a INT
 );
+CREATE UNIQUE INDEX t1_a ON t1 (a);
 CREATE TABLE multi_pk (a, b, c, PRIMARY KEY (b, a));
 -- Check we can use keywords as identifiers with "double quotes"
 CREATE TABLE "select" (
@@ -50,8 +51,6 @@ fn escape_name() -> anyhow::Result<()> {
     assert_eq!(t.escaped_name(), "\"select\"");
     assert_eq!(t.count_rows()?, 0);
 
-    println!("{:?}", super::get_table_names(&conn)?);
-
     let t = Table::new("foo \n\"bar", Rc::clone(&conn));
     assert!(t.in_db()?);
     assert_eq!(t.escaped_name(), "\"foo \n\"\"bar\"");
@@ -74,5 +73,18 @@ fn foreign_keys() -> anyhow::Result<()> {
     } else {
         unreachable!();
     }
+    Ok(())
+}
+
+#[test]
+fn index_cols() -> anyhow::Result<()> {
+    let conn = Rc::new(Connection::open_in_memory()?);
+    conn.execute_batch(SCHEMA)?;
+
+    let iis = Table::new("t1", Rc::clone(&conn)).indexes_info()?;
+    let ii = iis.first().unwrap();
+    assert_eq!(ii.name, "t1_a");
+    assert_eq!(ii.unique, true);
+    assert_eq!(ii.column_names(&conn)?, ["a"]);
     Ok(())
 }
