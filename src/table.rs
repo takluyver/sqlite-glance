@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
 use rusqlite::{Connection, Result, Row, Rows};
+use sqlparser::ast::{ColumnDef, ColumnOption, Statement};
+use sqlparser::dialect::SQLiteDialect;
+use sqlparser::parser::Parser;
 
 mod keywords;
 mod tests;
@@ -226,6 +229,36 @@ impl Table {
             [],
             |r| r.get(0),
         )
+    }
+
+    /// Get the AST node for the definition of the named column
+    fn col_def_ast(&self, col_name: &str) -> Result<Option<ColumnDef>> {
+        if let Ok(ast) = Parser::parse_sql(&SQLiteDialect {}, &self.create_sql()?) {
+            if let Some(Statement::CreateTable { columns: cols, .. }) = ast.first() {
+                for coldef in cols {
+                    if coldef.name.value == col_name {
+                        return Ok(Some(coldef.clone()));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Find & format the AS (?) expression for a generated column
+    pub fn get_gencol_expr(&self, col_name: &str) -> Result<String> {
+        if let Some(coldef) = self.col_def_ast(col_name)? {
+            for o in &coldef.options {
+                if let ColumnOption::Generated {
+                    generation_expr: Some(e),
+                    ..
+                } = &o.option
+                {
+                    return Ok(format!("{}", e));
+                }
+            }
+        }
+        Ok("<could not get AS expression>".to_string())
     }
 }
 
