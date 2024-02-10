@@ -20,6 +20,11 @@ FOREIGN KEY (a, b) REFERENCES multi_pk (a, b));
 CREATE TABLE "foo 
 ""bar" (a);
 CREATE VIEW v1 (recip_a) AS SELECT (1/a) FROM t1 WHERE a != 0;
+CREATE TABLE gen_cols (
+    a NUMERIC,
+    square AS (a * a) STORED,
+    hexadec GENERATED ALWAYS AS (hex(a))
+)
 "#;
 
 #[test]
@@ -86,5 +91,16 @@ fn index_cols() -> anyhow::Result<()> {
     assert_eq!(ii.name, "t1_a");
     assert_eq!(ii.unique, true);
     assert_eq!(ii.column_names(&conn)?, ["a"]);
+    Ok(())
+}
+
+#[test]
+fn generated_cols() -> anyhow::Result<()> {
+    let conn = Rc::new(Connection::open_in_memory()?);
+    conn.execute_batch(SCHEMA)?;
+
+    let t = Table::new("gen_cols", Rc::clone(&conn));
+    assert_eq!(t.get_gencol_expr("square")?, "a * a");
+    assert_eq!(t.get_gencol_expr("hexadec")?, "hex(a)");
     Ok(())
 }
