@@ -48,6 +48,39 @@ fn show_in_pager(text: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+// This function comes from user jbe on the Rust users forum (with minor modifications)
+// https://users.rust-lang.org/t/how-to-print-the-byte-string-literal-of-a-bytes/78910/5
+fn to_byte_string_literal(a: impl AsRef<[u8]>) -> String {
+    fn inner(bytes: &[u8]) -> String {
+        let mut lit = String::from("b\"");
+        for &byte in bytes {
+            if byte >= 40 && byte <= 126 {
+                lit.push(std::char::from_u32(byte as u32).unwrap());
+            } else {
+                write!(lit, "\\x{byte:02X}").unwrap();
+            }
+        }
+        lit.push('"');
+        lit
+    }
+    inner(a.as_ref())
+}
+
+fn fmt_n_bytes(n: usize) -> String {
+    if n < 1024 {
+        return format!("{} B", n);
+    }
+    let mut size: f32 = n as f32;
+    let units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
+    for unit in units {
+        size /= 1024.0;
+        if size < 1024.0 {
+            return format!("{:.1} {}", size, unit);
+        }
+    }
+    "huge".to_string()
+}
+
 /// Show sample rows from one SQLite table
 /// Main implementation for `sqlite-glance file.db table`
 fn inspect_table(
@@ -90,7 +123,17 @@ fn inspect_table(
                 Value::Integer(i) => i.to_string(),
                 Value::Real(f) => f.to_string(),
                 Value::Text(s) => s,
-                Value::Blob(_) => "<blob>".to_string(),
+                Value::Blob(v) => {
+                    if v.len() <= 8 {
+                        to_byte_string_literal(v)
+                    } else {
+                        format!(
+                            "{}.. ({})",
+                            to_byte_string_literal(&v[..6]),
+                            fmt_n_bytes(v.len())
+                        )
+                    }
+                }
             });
         }
         table.add_row(row_vec);
