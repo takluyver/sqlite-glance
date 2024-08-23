@@ -233,7 +233,7 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
             }
             // Show primary key on column if it's a PK by itself.
             // pk_cols may be empty for integer PKs.
-            if col_info.pk > 0 && pk_cols.len() < 1 {
+            if col_info.pk > 0 && pk_cols.len() <= 1 {
                 write!(output, " PRIMARY KEY")?;
             } else if cols_unique.contains(&col_info.name) {
                 write!(output, " UNIQUE")?;
