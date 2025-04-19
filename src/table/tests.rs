@@ -123,8 +123,12 @@ fn virtual_table() -> anyhow::Result<()> {
 
     let t = Table::new("email", Rc::clone(&conn));
     assert_eq!(t.virtual_using()?, Some("fts5".to_owned()));
+    assert!(!t.is_shadow()?);
 
     let t2 = Table::new("gen_cols", Rc::clone(&conn));
     assert_eq!(t2.virtual_using()?, None);
+
+    let st = Table::new("email_config", Rc::clone(&conn));
+    assert!(st.is_shadow()?);
     Ok(())
 }

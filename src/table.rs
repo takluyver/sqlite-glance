@@ -180,15 +180,20 @@ impl Table {
             return Ok(None);
         }
         if let Ok(ast) = Parser::parse_sql(&SQLiteDialect {}, &self.create_sql()?) {
-            if let Some(Statement::CreateVirtualTable {
-                module_name: modname,
-                ..
-            }) = ast.first()
-            {
-                return Ok(Some(modname.value.clone()));
+            if let Some(Statement::CreateVirtualTable { module_name: m, .. }) = ast.first() {
+                return Ok(Some(m.value.clone()));
             }
         }
         Ok(None)
+    }
+
+    pub fn is_shadow(&self) -> Result<bool> {
+        let ttype: String = self.conn.query_row(
+            "SELECT type FROM pragma_table_list WHERE name=?",
+            [&self.name],
+            |r| r.get(0),
+        )?;
+        Ok(ttype == "shadow")
     }
 
     pub fn columns_info(&self) -> Result<Vec<ColumnInfo>> {

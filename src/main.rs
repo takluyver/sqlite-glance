@@ -215,22 +215,20 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
         let nrows = table.count_rows()?;
         let foreign_keys = table.foreign_key_info()?;
 
-        if let Some(using) = table.virtual_using()? {
-            writeln!(
-                output,
-                "{} virtual table using {} ({} rows):",
-                table.escaped_name().bright_green().bold(),
-                using,
-                nrows
-            )?;
+        let description = if let Some(using) = table.virtual_using()? {
+            format!("virtual table using {}", using)
+        } else if table.is_shadow()? {
+            "shadow table".to_string()
         } else {
-            writeln!(
-                output,
-                "{} table ({} rows):",
-                table.escaped_name().bright_green().bold(),
-                nrows
-            )?;
-        }
+            "table".to_string()
+        };
+        writeln!(
+            output,
+            "{} {} ({} rows):",
+            table.escaped_name().bright_green().bold(),
+            description,
+            nrows
+        )?;
 
         // Columns info
         for col_info in table.columns_info()? {
