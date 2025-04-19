@@ -174,6 +174,23 @@ impl Table {
         )?)
     }
 
+    /// Get the name of the module a virtual table is using
+    pub fn virtual_using(&self) -> Result<Option<String>> {
+        if self.name.starts_with("sqlite_") {
+            return Ok(None);
+        }
+        if let Ok(ast) = Parser::parse_sql(&SQLiteDialect {}, &self.create_sql()?) {
+            if let Some(Statement::CreateVirtualTable {
+                module_name: modname,
+                ..
+            }) = ast.first()
+            {
+                return Ok(Some(modname.value.clone()));
+            }
+        }
+        Ok(None)
+    }
+
     pub fn columns_info(&self) -> Result<Vec<ColumnInfo>> {
         let mut stmt = self.conn.prepare("SELECT * from pragma_table_xinfo(?)")?;
         let rows = stmt.query_map([&self.name], |row| ColumnInfo::from_row(row))?;
@@ -262,13 +279,27 @@ impl Table {
     }
 }
 
-/// Get the names of all tables in the database
-pub fn get_table_names(conn: &Connection) -> Result<Vec<String>> {
-    let mut stmt = conn.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")?;
-    let rows = stmt.query_map([], |row| row.get(0))?;
+/// Get the names of tables (inc. virtual tables) in the database.
+/// inc_hidden also includes shadow tables & sqlite_* system tables
+pub fn get_table_names(conn: &Connection, inc_hidden: &bool) -> Result<Vec<String>> {
     let mut table_names = Vec::new();
-    for name_result in rows {
-        table_names.push(name_result?);
+
+    let mut where_clauses = vec!["type IN ('table', 'virtual') AND NOT name LIKE 'sqlite_%'"];
+    if *inc_hidden {
+        // Separate queries to show hidden tables after regular ones
+        where_clauses.extend([
+            "type = 'shadow'",
+            "name LIKE 'sqlite_%' AND schema != 'temp'",
+        ])
+    }
+    for where_clause in where_clauses {
+        let mut stmt = conn.prepare(&format!(
+            "SELECT name FROM pragma_table_list WHERE {}",
+            where_clause
+        ))?;
+        for name_result in stmt.query_map([], |row| row.get(0))? {
+            table_names.push(name_result?);
+        }
     }
     Ok(table_names)
 }

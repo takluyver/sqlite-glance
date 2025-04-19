@@ -1,7 +1,7 @@
 #![cfg(test)]
 use std::rc::Rc;
 
-use super::Table;
+use super::{get_table_names, Table};
 use anyhow;
 use rusqlite::Connection;
 
@@ -24,7 +24,8 @@ CREATE TABLE gen_cols (
     a NUMERIC,
     square AS (a * a) STORED,
     hexadec GENERATED ALWAYS AS (hex(a))
-)
+);
+CREATE VIRTUAL TABLE email USING fts5(sender, title, body);
 "#;
 
 #[test]
@@ -102,5 +103,28 @@ fn generated_cols() -> anyhow::Result<()> {
     let t = Table::new("gen_cols", Rc::clone(&conn));
     assert_eq!(t.get_gencol_expr("square")?, "a * a");
     assert_eq!(t.get_gencol_expr("hexadec")?, "hex(a)");
+    Ok(())
+}
+
+#[test]
+fn virtual_table() -> anyhow::Result<()> {
+    let conn = Rc::new(Connection::open_in_memory()?);
+    conn.execute_batch(SCHEMA)?;
+
+    let non_hidden_tbls = get_table_names(&conn, &false)?;
+    assert!(non_hidden_tbls.contains(&"email".to_owned()));
+    assert!(!non_hidden_tbls.contains(&"email_data".to_owned()));
+    assert!(!non_hidden_tbls.contains(&"sqlite_master".to_owned()));
+
+    let all_tbls = get_table_names(&conn, &false)?;
+    assert!(all_tbls.contains(&"email".to_owned()));
+    assert!(!all_tbls.contains(&"email_data".to_owned()));
+    assert!(!all_tbls.contains(&"sqlite_master".to_owned()));
+
+    let t = Table::new("email", Rc::clone(&conn));
+    assert_eq!(t.virtual_using()?, Some("fts5".to_owned()));
+
+    let t2 = Table::new("gen_cols", Rc::clone(&conn));
+    assert_eq!(t2.virtual_using()?, None);
     Ok(())
 }

@@ -6,7 +6,7 @@ use std::process;
 use std::rc::Rc;
 
 use anyhow;
-use clap::{value_parser, Arg, Command};
+use clap::{value_parser, Arg, ArgAction, Command};
 use comfy_table;
 use comfy_table::presets::UTF8_FULL;
 use crossterm::tty::IsTty;
@@ -180,9 +180,9 @@ fn inspect_table(
     Ok(())
 }
 
-fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
+fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> anyhow::Result<()> {
     let mut output = String::new();
-    let table_names = get_table_names(&conn)?;
+    let table_names = get_table_names(&conn, &inc_hidden)?;
     writeln!(
         output,
         "{} — {} tables",
@@ -215,12 +215,22 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path) -> anyhow::Result<()> {
         let nrows = table.count_rows()?;
         let foreign_keys = table.foreign_key_info()?;
 
-        writeln!(
-            output,
-            "{} table ({} rows):",
-            table.escaped_name().bright_green().bold(),
-            nrows
-        )?;
+        if let Some(using) = table.virtual_using()? {
+            writeln!(
+                output,
+                "{} virtual table using {} ({} rows):",
+                table.escaped_name().bright_green().bold(),
+                using,
+                nrows
+            )?;
+        } else {
+            writeln!(
+                output,
+                "{} table ({} rows):",
+                table.escaped_name().bright_green().bold(),
+                nrows
+            )?;
+        }
 
         // Columns info
         for col_info in table.columns_info()? {
@@ -337,6 +347,14 @@ fn main() -> anyhow::Result<()> {
                 .help("Table or view to inspect"),
         )
         .arg(
+            Arg::new("hidden")
+                .long("hidden")
+                .action(ArgAction::SetTrue)
+                .help(
+                    "Show SQLite system tables & shadow tables for virtual tables in the overview",
+                ),
+        )
+        .arg(
             Arg::new("where")
                 .short('w')
                 .long("where")
@@ -346,6 +364,7 @@ fn main() -> anyhow::Result<()> {
             Arg::new("limit")
                 .short('n')
                 .long("limit")
+                .value_name("N")
                 .default_value("12")
                 .value_parser(value_parser!(u32))
                 .help("Maximum number of rows to show in table view"),
@@ -372,6 +391,7 @@ fn main() -> anyhow::Result<()> {
         inspect_table(table, &filename, where_cl, limit)
     } else {
         // No table specified - show DB schema
-        inspect_schema(conn, &filename)
+        let inc_hidden = matches.get_one::<bool>("hidden").unwrap();
+        inspect_schema(conn, &filename, &inc_hidden)
     }
 }
