@@ -5,7 +5,7 @@
 - A new `--hidden` flag to show in the schema view:
   - Hidden columns in virtual tables (previously always shown)
   - Shadow tables, used internally by virtual tables (previously always shown)
-  - System tables like `sqlite_master` (previously never shown)
+  - System tables like `sqlite_schema` (previously never shown)
 
 ## 0.4.1
 
