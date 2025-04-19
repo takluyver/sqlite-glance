@@ -234,6 +234,9 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
 
         // Columns info
         for col_info in table.columns_info()? {
+            if (col_info.hidden == 1) && !inc_hidden {
+                continue;
+            }
             write!(output, "  {}", col_info.name.cyan())?;
             if !col_info.dtype.is_empty() {
                 write!(output, " {}", col_info.dtype)?;
@@ -257,13 +260,15 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
                     write!(output, " ({})", fmt_col_names(&fk_info.to))?;
                 }
             }
-            // TODO: Show expression for generated columns
-            // See sqlparser-rs issues #743 & #1050
+            // Show expression for generated columns
             if (col_info.hidden == 2) || (col_info.hidden == 3) {
                 write!(output, " AS ({})", table.get_gencol_expr(&col_info.name)?)?;
                 if col_info.hidden == 3 {
                     write!(output, " STORED")?;
                 }
+            } else if col_info.hidden == 1 {
+                // This only comes up in virtual tables
+                write!(output, " hidden")?;
             }
             writeln!(output)?;
         }
@@ -351,7 +356,7 @@ fn main() -> anyhow::Result<()> {
                 .long("hidden")
                 .action(ArgAction::SetTrue)
                 .help(
-                    "Show SQLite system tables & shadow tables for virtual tables in the overview",
+                    "Show shadow tables, SQLite system tables & hidden columns in virtual tables",
                 ),
         )
         .arg(
