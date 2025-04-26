@@ -225,6 +225,19 @@ impl Table {
         ForeignKeys::from_rows(rows)
     }
 
+    pub fn triggers_info(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT name, sql FROM sqlite_schema \
+                                          WHERE type='trigger' AND tbl_name=?",
+        )?;
+        let rows = stmt.query_map([&self.name], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut res = Vec::new();
+        for result in rows {
+            res.push(result?);
+        }
+        Ok(res)
+    }
+
     /// Quote the table name if needed to ensure it's a valid identifier
     pub fn escaped_name(&self) -> String {
         // SQLite actually allows $ and any non-ascii character in identifiers
