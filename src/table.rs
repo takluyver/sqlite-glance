@@ -256,8 +256,8 @@ impl Table {
     /// Get the AST node for the definition of the named column
     fn col_def_ast(&self, col_name: &str) -> Result<Option<ColumnDef>> {
         if let Ok(ast) = Parser::parse_sql(&SQLiteDialect {}, &self.create_sql()?) {
-            if let Some(Statement::CreateTable { columns: cols, .. }) = ast.first() {
-                for coldef in cols {
+            if let Some(Statement::CreateTable(ct)) = ast.first() {
+                for coldef in &ct.columns {
                     if coldef.name.value == col_name {
                         return Ok(Some(coldef.clone()));
                     }
