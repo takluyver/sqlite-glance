@@ -299,7 +299,7 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
         if !triggers.is_empty() {
             writeln!(output, "Triggers:")?;
             for (name, _) in triggers {
-                writeln!(output, "  {}", name)?;
+                writeln!(output, "  {}", name.bright_magenta())?;
                 // More trigger info needs support for parsing CREATE TRIGGER
                 // https://github.com/apache/datafusion-sqlparser-rs/issues/1388
             }
