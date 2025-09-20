@@ -196,6 +196,24 @@ impl Table {
         Ok(ttype == "shadow")
     }
 
+    pub fn is_strict(&self) -> Result<bool> {
+        let i: i64 = self.conn.query_row(
+            "SELECT strict FROM pragma_table_list WHERE name=?",
+            [&self.name],
+            |r| r.get(0),
+        )?;
+        Ok(i == 1)
+    }
+
+    pub fn is_without_row_id(&self) -> Result<bool> {
+        let i: i64 = self.conn.query_row(
+            "SELECT wr FROM pragma_table_list WHERE name=?",
+            [&self.name],
+            |r| r.get(0),
+        )?;
+        Ok(i == 1)
+    }
+
     pub fn columns_info(&self) -> Result<Vec<ColumnInfo>> {
         let mut stmt = self.conn.prepare("SELECT * from pragma_table_xinfo(?)")?;
         let rows = stmt.query_map([&self.name], |row| ColumnInfo::from_row(row))?;

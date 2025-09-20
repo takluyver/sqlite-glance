@@ -222,12 +222,28 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
         } else {
             "table".to_string()
         };
+        let tbl_attrs = {
+            let mut attrs = Vec::new();
+            if table.is_strict()? {
+                attrs.push(format!("{}", "STRICT".bold()))
+            }
+            if table.is_without_row_id()? {
+                attrs.push(format!("{}", "WITHOUT ROWID".bold()))
+                //attrs.push("WITHOUT ROWID".to_string().bold())
+            }
+            if attrs.is_empty() {
+                "".to_string()
+            } else {
+                format!(" [{}]", attrs.join(", "))
+            }
+        };
         writeln!(
             output,
-            "{} {} ({} rows):",
+            "{} {} ({} rows){}:",
             table.escaped_name().bright_green().bold(),
             description,
-            nrows
+            nrows,
+            tbl_attrs,
         )?;
 
         // Columns info
