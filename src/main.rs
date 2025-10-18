@@ -13,7 +13,7 @@ use crossterm::tty::IsTty;
 use rusqlite;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OpenFlags};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{CreateView, Statement};
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 use yansi::{Condition, Paint};
@@ -341,7 +341,7 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
 
         // Find the 'AS SELECT' clause for this view
         let ast = Parser::parse_sql(&SQLiteDialect {}, &view.create_sql()?)?;
-        if let Some(Statement::CreateView { query: q, .. }) = ast.first() {
+        if let Some(Statement::CreateView(CreateView { query: q, .. })) = ast.first() {
             writeln!(output, "AS {q}")?;
         }
     }
