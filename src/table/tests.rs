@@ -19,7 +19,11 @@ FOREIGN KEY (a, b) REFERENCES multi_pk (a, b));
 -- Identifiers in "double quotes" can use any characters except Null.
 CREATE TABLE "foo 
 ""bar" (a);
-CREATE VIEW v1 (recip_a) AS SELECT (1/a) FROM t1 WHERE a != 0;
+CREATE VIEW v1 (recip_a) AS SELECT (1.0/a) FROM t1 WHERE a != 0;
+CREATE TRIGGER recip_insert INSTEAD OF INSERT ON v1 WHEN NEW.recip_a != 0
+BEGIN
+    INSERT INTO t1(a) VALUES (1.0/NEW.recip_a);
+END;
 CREATE TABLE gen_cols (
     a NUMERIC,
     square AS (a * a) STORED,
@@ -130,5 +134,20 @@ fn virtual_table() -> anyhow::Result<()> {
 
     let st = Table::new("email_config", Rc::clone(&conn));
     assert!(st.is_shadow()?);
+    Ok(())
+}
+
+#[test]
+fn trigger() -> anyhow::Result<()> {
+    let conn = Rc::new(Connection::open_in_memory()?);
+    conn.execute_batch(SCHEMA)?;
+
+    let v1 = Table::new("v1", Rc::clone(&conn));
+    let triggers = v1.triggers_info()?;
+    assert_eq!(triggers.len(), 1);
+    let (name, sql) = triggers.first().unwrap();
+    assert_eq!(name, "recip_insert");
+    assert!(sql.contains("CREATE TRIGGER"));
+
     Ok(())
 }
