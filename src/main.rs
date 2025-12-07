@@ -13,7 +13,7 @@ use crossterm::tty::IsTty;
 use rusqlite;
 use rusqlite::types::Value;
 use rusqlite::{Connection, OpenFlags};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{ConditionalStatements, CreateView, Statement, TriggerEvent, TriggerPeriod};
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 use yansi::{Condition, Paint};
@@ -311,15 +311,7 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
             }
         }
 
-        let triggers = table.triggers_info()?;
-        if !triggers.is_empty() {
-            writeln!(output, "Triggers:")?;
-            for (name, _) in triggers {
-                writeln!(output, "  {}", name.bright_magenta())?;
-                // More trigger info needs support for parsing CREATE TRIGGER
-                // https://github.com/apache/datafusion-sqlparser-rs/issues/1388
-            }
-        }
+        display_triggers(&table, &mut output)?;
         writeln!(output)?;
     }
 
@@ -341,9 +333,12 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
 
         // Find the 'AS SELECT' clause for this view
         let ast = Parser::parse_sql(&SQLiteDialect {}, &view.create_sql()?)?;
-        if let Some(Statement::CreateView { query: q, .. }) = ast.first() {
+        if let Some(Statement::CreateView(CreateView { query: q, .. })) = ast.first() {
             writeln!(output, "AS {q}")?;
         }
+
+        display_triggers(&view, &mut output)?;
+        writeln!(output)?;
     }
 
     if std::io::stdout().is_tty() {
@@ -358,6 +353,42 @@ fn inspect_schema(conn: Rc<Connection>, filename: &Path, inc_hidden: &bool) -> a
         println!("{}", output);
     }
 
+    Ok(())
+}
+
+fn display_triggers(table: &Table, output: &mut String) -> anyhow::Result<()> {
+    let triggers = table.triggers_info()?;
+    if triggers.is_empty() {
+        return Ok(());
+    }
+    writeln!(output, "Triggers:")?;
+    for (name, create_sql) in triggers {
+        write!(output, "  {}", name.bright_magenta())?;
+        let ast = Parser::parse_sql(&SQLiteDialect {}, &create_sql)?;
+        if let Some(Statement::CreateTrigger(ct)) = ast.first() {
+            if ct.period == Some(TriggerPeriod::After) {
+                write!(output, " AFTER")?;
+            }
+            if let Some(te) = ct.events.first() {
+                match te {
+                    TriggerEvent::Update(cols) => {
+                        let col_names: Vec<String> =
+                            cols.into_iter().map(|i| i.to_string()).collect();
+                        write!(output, " UPDATE OF {}", fmt_col_names(&col_names))?;
+                    }
+                    _ => write!(output, " {te}")?,
+                };
+            }
+            writeln!(output, "")?;
+            if let Some(ConditionalStatements::BeginEnd(bes)) = &ct.statements {
+                for stmt in &bes.statements {
+                    writeln!(output, "    {stmt};")?;
+                }
+            }
+        } else {
+            writeln!(output, " (could not parse CREATE TRIGGER statement)")?;
+        }
+    }
     Ok(())
 }
 
