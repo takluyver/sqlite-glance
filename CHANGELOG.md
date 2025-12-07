@@ -1,3 +1,9 @@
+## 0.6
+
+- Triggers are now shown in schema view, just below the table or view they are
+  attached to.
+- The schema view indicates where tables are defined as STRICT or WITHOUT ROWID.
+
 ## 0.5
 
 - Virtual tables are now marked as such in the schema view, along with the
