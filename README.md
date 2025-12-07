@@ -5,7 +5,7 @@ A terminal interface to quickly see the contents of an SQLite database file.
 Installation:
 
 ```
-cargo install sqlite-glance
+cargo install --locked sqlite-glance
 ```
 
 Usage:
