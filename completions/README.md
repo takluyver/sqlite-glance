@@ -13,11 +13,11 @@ by default.
 
 ### zsh
 
-Copy `sqlite-glance.zsh` into `~/.local/share/zsh-completions/`. Ensure that `~/.zshrc` contains
-something like this:
+Copy `sqlite-glance.zsh` into `~/.local/share/zsh-completions/` (or a location of your choice).
+Ensure that `~/.zshrc` contains something like this:
 
 ```shell
-fpath=("~/.local/share/completions" $fpath)
+fpath=("~/.local/share/zsh-completions" $fpath)
 compinit
 ```
 
