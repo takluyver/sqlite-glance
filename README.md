@@ -19,3 +19,6 @@ sqlite-glance my_db.sqlite table
 With only one argument, it presents the database structure in a (hopefully)
 readable format.
 Given a table (or view) name, it will show the contents of the first few rows.
+
+Integration with shell tab completion is available in the `completions/`
+directory of the git repository.
