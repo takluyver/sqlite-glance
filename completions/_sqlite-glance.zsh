@@ -1,7 +1,6 @@
-#!/usr/bin/env zsh
-#compdef _sqlite-glance sqlite-glance
+#compdef _sqlite-glance.zsh sqlite-glance
 
-function _sqlite-glance {
+function _sqlite-glance.zsh {
     local curcontext="$curcontext"
     local context state state_descr line
     typeset -A opt_args
@@ -24,9 +23,9 @@ function _sqlite-glance {
                 # List entries in the group, add the group path and a / suffix for
                 # subgroups, and case-insensitively filter them against the text entered.
                 matches=(
-                    sqlite3 -init /dev/null -safe -readonly "${prev}" "SELECT name FROM pragma_table_list() WHERE schema='main'" \
-                      | awk -v IGNORECASE=1 -v p="${cur}" \
-                        'p==substr($0,0,length(p))'
+                    $(sqlite3 -init /dev/null -readonly "${line[1]}" "SELECT name FROM sqlite_master WHERE type='table' OR type='view'" \
+                      | awk -v IGNORECASE=1 -v p="${line[2]}" \
+                      'p==substr($0,0,length(p))')
                 )
 
                 # The -M match-spec argument allows case-insensitive matches
