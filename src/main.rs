@@ -392,6 +392,20 @@ fn display_triggers(table: &Table, output: &mut String) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn make_completions(conn: Rc<Connection>, table_prefix: &str) -> anyhow::Result<()> {
+    // It was easier to do the prefix check in Rust than in SQL
+    let prefix_lower = table_prefix.to_lowercase();
+    let mut stmt = conn.prepare("SELECT name FROM pragma_table_list WHERE schema='main'")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(0).unwrap();
+        if name.to_lowercase().starts_with(&prefix_lower) {
+            print!("{}\0", name);
+        };
+    }
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let matches = Command::new("sqlite-glance")
         .version(env!("CARGO_PKG_VERSION"))
@@ -429,6 +443,12 @@ fn main() -> anyhow::Result<()> {
                 .value_parser(value_parser!(u32))
                 .help("Maximum number of rows to show in table view"),
         )
+        .arg(
+            Arg::new("completion")
+                .long("completion")
+                .action(ArgAction::SetTrue)
+                .hide(true),
+        )
         .get_matches();
 
     yansi::whenever(Condition::TTY_AND_COLOR);
@@ -440,7 +460,11 @@ fn main() -> anyhow::Result<()> {
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?);
 
-    if let Some(table_name) = matches.get_one::<String>("table") {
+    if *matches.get_one::<bool>("completion").unwrap() {
+        // Tab complete table/view names
+        let table_prefix = matches.get_one::<String>("table").unwrap();
+        make_completions(conn, &table_prefix)
+    } else if let Some(table_name) = matches.get_one::<String>("table") {
         // Table/view name specified - show data
         let table = Table::new(table_name, Rc::clone(&conn));
         if !table.in_db()? {

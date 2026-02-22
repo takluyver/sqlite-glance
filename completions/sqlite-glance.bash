@@ -17,11 +17,8 @@ _sqlite-glance()
 
     # Complete paths inside file
     if [[ -f ${prev} ]]; then
-      # List tables, case-insensitively filter them against the text entered.
-      mapfile -t COMPREPLY < <(sqlite3 -init /dev/null -safe -readonly "${prev}" "SELECT name FROM pragma_table_list() WHERE schema='main'" \
-          | awk -v IGNORECASE=1 -v p="${cur}" \
-              'p==substr($0,0,length(p))' \
-     )
+      # List tables/views matching the prefix
+      mapfile -d '' COMPREPLY < <(sqlite-glance --completion "${prev}" "${cur}")
       return 0
     fi
 }

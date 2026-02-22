@@ -19,14 +19,8 @@ function _sqlite-glance.zsh {
     case "$state" in
         infile)
                 declare -a matches
-
-                # List entries in the group, add the group path and a / suffix for
-                # subgroups, and case-insensitively filter them against the text entered.
-                matches=(
-                    $(sqlite3 -init /dev/null -readonly "${line[1]}" "SELECT name FROM sqlite_master WHERE type='table' OR type='view'" \
-                      | awk -v IGNORECASE=1 -v p="${line[2]}" \
-                      'p==substr($0,0,length(p))')
-                )
+                output=$(sqlite-glance --completion "${line[1]}" "${line[2]}")
+                matches=( ${(0)output} )  # Split on null bytes
 
                 # The -M match-spec argument allows case-insensitive matches
                 compadd -M 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}' -a matches
