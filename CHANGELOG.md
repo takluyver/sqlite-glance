@@ -1,3 +1,8 @@
+## 0.7
+
+- Tab completions for table & view names now use `sqlite-glance` itself,
+  instead of the `sqlite3` command.
+
 ## 0.6
 
 - Triggers are now shown in schema view, just below the table or view they are
